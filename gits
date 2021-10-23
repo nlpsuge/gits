@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+
+error_projects=""
+success_projects=""
+
+git_operate_switch()
+{
+    if [ x"$1" == x"-pp" ]; then
+        git pull -p
+    elif [ x"$1" == x"-s" ]; then
+        git status
+    elif [ x"$1" == x"-cm" ]; then
+        git checkout master
+    else
+	#git model
+#        if [[ "$1" != git* ]]; then
+#            bash -c "git $1"
+#        else
+            bash -c "$1"
+#        fi
+    fi
+}
+
+git_operate()
+{
+    file=$1
+
+    cd "$file"
+    echo "git_operate: cd: $file"
+	if [ ! -d ".git" ]; then
+        return
+    fi
+	
+    echo "Handing $(basename $file)($(git symbolic-ref --short HEAD))"
+    failed_1=$?
+    git_operate_switch "$2"
+    failed_2=$?
+    if [ "$failed_1" != 0 -o "$failed_2" != 0 ]; then
+        error_projects="$error_projects""Failed to handle \""$file"\"\n"
+    else
+        success_projects="$success_projects""Succeeded to handle \""$file"\"\n"
+    fi
+    echo
+
+}
+
+git_operate_folders()
+{
+    # Process current folder if .git is pressent
+    git_operate "$(pwd)" "$1"
+    
+    # Process subfolder if .git is pressent in it
+    for file in *; do
+        if [ -d "$file/.git" ]; then
+            path="$(pwd)/$file"
+            echo "git_operate_folders: process: $path"
+            git_operate "$path" "$1"
+            # Reset
+            cd ..
+        fi
+    done
+    
+}
+
+git_handle_subfolders()
+{
+    # Process current folder if .git is pressent
+    git_operate "$(pwd)" "$1"
+	
+    for file in *; do
+        if [ -d "$file" ]; then
+            path="$(pwd)/$file"
+            cd "$file"
+            echo -n "git_handle_subfolders: cd: $path"
+            if [ ! -d ".git" ]; then
+               echo " skipping..."
+               git_handle_subfolders "$1"
+            else
+                echo
+                git_operate_folders "$1"
+            fi
+            # Reset
+            cd ..
+        fi
+    done
+}
+
+if [ x"$*" == x"" -o x"$1" == x"-h" -o x"$1" == x"--help" ]; then
+    echo "Usage:
+    gits [OPTION]
+Commands:
+    EMPTY PAREMETER, -h, --help
+                   Print this message
+    -pp            Execute 'git pull -p'
+    -s             Execute 'git status'
+    -cm            Execute 'git checkout master'
+    
+    Otherwise execute what you type.
+    "
+    exit 0
+fi
+
+git_handle_subfolders "$*"
+
+if [ x"$error_projects" != x"" ]; then
+    echo "Errors:"
+    echo -e "$error_projects" | sort -r | uniq
+fi
+
+if [ x"$success_projects" != x"" ]; then
+    echo "Success:"
+    echo -e "$success_projects" | sort -r | uniq
+fi
+
+
